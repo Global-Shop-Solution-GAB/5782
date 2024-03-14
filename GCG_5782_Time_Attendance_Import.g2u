@@ -1,0 +1,712 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Caption("Import Nova Time to GSS")
+Gui.Form..Size(10755,2460)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form.txtFilePath.Create(TextBox,"",True,9375,300,0,210,1215,True,0,"Arial",8,-2147483643,1)
+Gui.Form.lbl1.Create(Label,"File Path (.csv)",True,1215,255,0,210,990,True,0,"Arial",8,-2147483633,0)
+Gui.Form.cmdBrowseFile.Create(Button)
+Gui.Form.cmdBrowseFile.Size(735,375)
+Gui.Form.cmdBrowseFile.Position(9660,1170)
+Gui.Form.cmdBrowseFile.Caption("^")
+Gui.Form.cmdBrowseFile.Event(Click,cmdBrowseFile_Click)
+Gui.Form.cmdOK.Create(Button)
+Gui.Form.cmdOK.Size(855,375)
+Gui.Form.cmdOK.Position(210,1620)
+Gui.Form.cmdOK.Caption("OK")
+Gui.Form.cmdOK.Event(Click,cmdOK_Click)
+Gui.Form.proBar.Create(ProgressBar)
+Gui.Form.proBar.Size(9105,135)
+Gui.Form.proBar.Position(1260,1740)
+Gui.Form.proBar.Visible(False)
+Gui.Form.dtpStartDate.Create(DatePicker)
+Gui.Form.dtpStartDate.Size(1545,285)
+Gui.Form.dtpStartDate.Position(210,495)
+Gui.Form.lbl2.Create(Label,"Start Date",True,990,255,0,210,270,True,0,"Arial",8,-2147483633,0)
+Gui.Form.lbl3.Create(Label,"End Date",True,990,255,0,1965,270,True,0,"Arial",8,-2147483633,0)
+Gui.Form.dtpEndDate.Create(DatePicker)
+Gui.Form.dtpEndDate.Size(1545,285)
+Gui.Form.dtpEndDate.Position(2010,495)
+Gui.Form.cmdHelp.Create(Button)
+Gui.Form.cmdHelp.Size(360,315)
+Gui.Form.cmdHelp.Position(3735,495)
+Gui.Form.cmdHelp.Caption("?")
+Gui.Form.cmdHelp.ToolTip("This is the period that will be overwritten in Time_Attendance in GSS by Nova Time")
+Gui.Form.cmdHelp.Event(Click,cmdHelp_Click)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+f.Intrinsic.Control.CallSub("Check_And_Create_Custom_Folder")
+v.Global.sBackupTime.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'BN Nov, 2019
+'Customer: Menk USA, LLC
+'Import Vacation Left from a csv file
+'Columns header: EMPLOYEE, NAME, Vacation Left
+ 
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.bAdminGroup.Declare
+
+	'Check if user is not in security group
+	F.Global.Security.IsInGroup(V.Caller.User,"TIMEATT",V.Caller.CompanyCode,V.Local.bAdminGroup)
+	f.Intrinsic.Control.If(v.Local.bAdminGroup.Not)
+		f.Intrinsic.UI.Msgbox("You are not allowed to use this Program","Attention")
+		f.Intrinsic.Control.CallSub("Unload")
+	f.Intrinsic.Control.EndIf	
+	
+	f.ODBC.Connection!conx.OpenCompanyConnection(300)
+	gui.Form..Show
+
+F.Intrinsic.Control.Catch
+    F.Intrinsic.String.Build("Project 5782: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+    f.Intrinsic.Control.CallSub("Write_GAB_Error_Log","sError",v.Local.sError)
+    F.Intrinsic.UI.Msgbox(V.Local.sError)    
+    F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.cmdOK_Click.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sSQL.Declare
+	v.Local.sRet.Declare
+	v.Local.sHold.Declare
+	v.Local.sNotPassed.Declare
+	
+	v.Local.sFilePath.Declare	
+	v.Local.sContent.Declare
+	v.Local.sLine.Declare
+	v.Local.sCheckBlankLine.Declare
+	v.Local.sVacationLeft.Declare
+	v.Local.sEmployee.Declare
+
+	v.Local.iExcelLine.Declare
+	v.Local.iCnt.Declare
+	v.Local.iError.Declare	
+	V.Local.iSuccess.Declare
+	v.Local.iEmployee.Declare
+	
+	v.Local.bExist.Declare
+	v.Local.bNumeric.Declare	
+
+	v.Local.fVariance.Declare
+	v.Local.dStart.Declare
+	V.Local.dEnd.Declare
+	v.Local.sWorkDate.Declare
+	v.Local.sInDate.Declare
+	v.Local.sOutDate.Declare
+	
+	v.Local.dWorkDate.Declare
+	v.Local.dInDate.Declare
+	v.Local.dOutDate.Declare
+	
+	v.Local.bDate.Declare
+	
+	v.Local.sTimeIn.Declare
+	v.Local.sTimeOut.Declare	
+	v.Local.sGSSTimeStampIn.Declare
+	v.Local.sGSSTimeStampOut.Declare
+	v.Local.sHour.Declare
+	v.Local.sMinute.Declare
+	v.Local.sSec.Declare	
+	
+	v.Local.dInDateTime.Declare
+	v.Local.dOutDateTime.Declare
+	v.Local.sYY.Declare
+	v.Local.sMM.Declare
+	v.Local.sDD.Declare
+	
+	v.Local.iMinuteDiff.Declare
+	v.Local.iHourTaken.Declare
+	v.Local.iMinuteTaken.Declare	
+	
+	v.Local.sTransactionFile.Declare
+	
+	v.Local..BulkDeclareString(EMPLOYEE,CHARGE_DATE,IN_TS_MIN,OUT_TS_MIN,DATE_IN,TIME_IN,DATE_OUT,TIME_OUT,NAME,DEPT,SHIFT,REC_GROUP,REC_TYPE,EARNINGS_CODE,PAID,EXCUSED,ABSENCE_DESC,CLOCKED_IN,BAL_AS_DATE,DATE_LAST_CHG,TIME_LAST_CHG,LAST_CHG_BY,LAST_CHG_PROG,HOURS_HH,HOURS_MM,ONLY_DOLLARS,DOLLAR_AMT,PAYROLL_LOCK)	
+	v.Local.fEC.Declare
+	v.Local.ACTUAL_DATE.Declare(Date)	
+	
+	v.Global.sBackupTime.Set(v.Ambient.Now.FormatYYYYMMDDHHNNSS)
+	
+	'Check Date
+	v.Local.dStart.Set(v.Screen.Form!dtpStartDate.Value)
+	v.Local.dEnd.Set(v.Screen.Form!dtpEndDate.Value)
+	f.Intrinsic.Control.If(v.Local.dStart,>,v.Local.dEnd)
+		f.Intrinsic.UI.Msgbox("Date range is invalid.","Attention")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf
+	
+	'Check file exist
+	f.Intrinsic.File.Exists(v.Screen.Form!txtFilePath.Text.Trim,v.Local.bExist)
+	f.Intrinsic.Control.If(v.Local.bExist.Not)
+		f.Intrinsic.UI.Msgbox("File does not exist. Please verify file path","No file found")
+		f.Intrinsic.Control.ExitSub		
+	f.Intrinsic.Control.EndIf
+	
+	'Enable controls
+	gui.Form.cmdOK.Enabled(False)
+	gui.Form.proBar.Visible(True)
+	
+	'Get file content
+	F.Intrinsic.File.FileToStringArray(v.Screen.Form!txtFilePath.Text.Trim,v.Ambient.NewLine,v.Local.sContent)
+	f.Intrinsic.Control.If(v.Local.sContent.UBound,>,0)
+		gui.Form.proBar.Max(v.Local.sContent.UBound)
+	f.Intrinsic.Control.EndIf
+	
+	'Backup
+	f.Intrinsic.String.Build("Insert into GCG_5782_Backup (BackupDateTime,EMPLOYEE,CHARGE_DATE,IN_TS_MIN,OUT_TS_MIN,DATE_IN,TIME_IN,DATE_OUT,TIME_OUT,NAME,DEPT,SHIFT,REC_GROUP,REC_TYPE,EARNINGS_CODE,PAID,EXCUSED,ABSENCE_DESC,CLOCKED_IN,BAL_AS_DATE,DATE_LAST_CHG,TIME_LAST_CHG,LAST_CHG_BY,LAST_CHG_PROG,HOURS_HH,HOURS_MM,ONLY_DOLLARS,DOLLAR_AMT,ACTUAL_DATE) (Select Convert('{0}',SQL_Float) as BackupDateTime,EMPLOYEE,CHARGE_DATE,IN_TS_MIN,OUT_TS_MIN,DATE_IN,TIME_IN,DATE_OUT,TIME_OUT,NAME,DEPT,SHIFT,REC_GROUP,REC_TYPE,EARNINGS_CODE,PAID,EXCUSED,ABSENCE_DESC,CLOCKED_IN,BAL_AS_DATE,DATE_LAST_CHG,TIME_LAST_CHG,LAST_CHG_BY,LAST_CHG_PROG,HOURS_HH,HOURS_MM,ONLY_DOLLARS,DOLLAR_AMT,ACTUAL_DATE  from TIME_ATTENDANCE where Charge_Date between {1} and {2})",v.Global.sBackupTime,v.Local.dStart.FormatYYYYMMDD,v.Local.dEnd.FormatYYYYMMDD,v.Local.sSQL)
+	f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+	
+	f.Intrinsic.String.Build("Delete from Time_Attendance where Charge_Date between '{0}' and '{1}'",v.Local.dStart.FormatYYYYMMDD,v.Local.dEnd.FormatYYYYMMDD,v.Local.sSQL)
+	f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+		
+	'Loop, process and upload
+	f.Intrinsic.Control.For(v.Local.iCnt,1,v.Local.sContent.UBound,1)
+	
+		gui.Form.proBar.Value(v.Local.iCnt)
+		'Excel row number
+		f.Intrinsic.Math.Add(v.Local.iCnt,1,v.Local.iExcelLine)
+		'Check blank line
+		f.Intrinsic.String.Replace(v.Local.sContent(v.Local.iCnt).Trim,",","",v.Local.sCheckBlankLine)
+		f.Intrinsic.Control.If(v.Local.sCheckBlankLine.Trim,<>,"")
+			'Replace single and double quote
+			f.Intrinsic.String.Replace(v.Local.sContent(v.Local.iCnt),"'"," ",v.Local.sContent(v.Local.iCnt))
+			f.Intrinsic.String.Replace(v.Local.sContent(v.Local.iCnt),v.Ambient.DblQuote,"",v.Local.sContent(v.Local.iCnt))		
+			
+			'Split into cells
+			f.Intrinsic.String.Split(v.Local.sContent(v.Local.iCnt),",",v.Local.sLine)			
+			v.Local.sLine.RedimPreserve(0,7)
+			
+			'1/Check Employee number	
+			'IsNumeric Employee
+			f.Intrinsic.Math.IsNumeric(v.Local.sLine(0).Trim,v.Local.bNumeric)
+			f.Intrinsic.Control.If(v.Local.bNumeric.Not)
+				f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: non Employee numeric value",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"Employee",v.Local.sNotPassed)
+				f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+				v.Local.sLine(7).Set("Error Employee non numeric value")
+				f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.GoTo("AfterFor")
+				f.Intrinsic.Control.EndIf
+				f.Intrinsic.Control.Next(v.Local.iCnt)			
+			f.Intrinsic.Control.EndIf		
+			
+			v.Local.iEmployee.Set(v.Local.sLine(0).Trim)
+			'Is valid Employee number
+			f.Intrinsic.String.LPad(v.Local.iEmployee,"0",5,v.Local.sEmployee)
+			f.Intrinsic.String.Build("Select Employee,Name,DEPT_EMPLOYEE,SHIFT from Employee_MSTR where Employee = '{0}'",v.Local.sEmployee,v.Local.sSQL)
+			f.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSQL,v.Local.sRet)
+			f.Intrinsic.Control.If(v.Local.sRet,=,"")
+				f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: Employee does not exists",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"Employee",v.Local.sNotPassed)
+				f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+				v.Local.sLine(7).Set("Error Employee does  not exits")
+				f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.GoTo("AfterFor")
+				f.Intrinsic.Control.EndIf				
+				f.Intrinsic.Control.Next(v.Local.iCnt)
+			f.Intrinsic.Control.Else
+				f.Intrinsic.String.Split(v.Local.sRet,"*!*",v.Local.sRet)
+				v.Local.EMPLOYEE.Set(v.Local.sRet(0).Trim)
+				v.Local.NAME.Set(v.Local.sRet(1).Trim)
+				v.local.DEPT.Set(v.Local.sRet(2).Trim)
+				v.local.SHIFT.Set(v.Local.sRet(3).Trim)
+				v.local.REC_GROUP.set("") 
+			f.Intrinsic.Control.EndIf	
+			
+			'2/Check Work Date, In Date, Out Date
+			'Work Date
+			v.Local.sWorkDate.Set(v.Local.sLine(1).Trim)			
+			f.Intrinsic.Date.IsDate(v.Local.sWorkDate,v.Local.bDate)
+			f.Intrinsic.Control.If(v.Local.bDate.Not)
+				f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: Work Date is not a Date",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"Work Date",v.Local.sNotPassed)
+				f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+				v.Local.sLine(7).Set("Error Work Date is not a Date")
+				f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.GoTo("AfterFor")
+				f.Intrinsic.Control.EndIf				
+				f.Intrinsic.Control.Next(v.Local.iCnt)	
+			f.Intrinsic.Control.Else
+				v.Local.dWorkDate.Set(v.Local.sWorkDate)
+				f.Intrinsic.Control.If(v.Local.dWorkDate,<,v.Local.dStart,or,v.Local.dWorkDate,>,v.Local.dEnd)
+					f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: Work Date is not in Date Range",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"Work Date",v.Local.sNotPassed)
+					f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+					v.Local.sLine(7).Set("Error Work Date is not in Date Range")
+					f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.GoTo("AfterFor")
+				f.Intrinsic.Control.EndIf					
+					f.Intrinsic.Control.Next(v.Local.iCnt)					
+				f.Intrinsic.Control.EndIf					
+			f.Intrinsic.Control.EndIf			
+			
+			'In Date
+			v.Local.sInDate.Set(v.Local.sLine(2).Trim)			
+			f.Intrinsic.Date.IsDate(v.Local.sInDate,v.Local.bDate)
+			f.Intrinsic.Control.If(v.Local.bDate.Not)
+				f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: In Date is not a Date",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"In Date",v.Local.sNotPassed)
+				f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+				v.Local.sLine(7).Set("Error In Date is not a Date")
+				f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.GoTo("AfterFor")
+				f.Intrinsic.Control.EndIf				
+				f.Intrinsic.Control.Next(v.Local.iCnt)
+			f.Intrinsic.Control.Else			
+				v.Local.dInDate.Set(v.Local.sInDate)
+				f.Intrinsic.Control.If(v.Local.dInDate,<,v.Local.dStart,or,v.Local.dInDate,>,v.Local.dEnd)
+					f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: In Date is not in Date Range",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"In Date",v.Local.sNotPassed)
+					f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+					v.Local.sLine(7).Set("Error In Date is not in Date Range")
+					f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.GoTo("AfterFor")
+				f.Intrinsic.Control.EndIf					
+					f.Intrinsic.Control.Next(v.Local.iCnt)					
+				f.Intrinsic.Control.EndIf
+			f.Intrinsic.Control.EndIf	
+			
+			'Out Date
+			v.Local.sOutDate.Set(v.Local.sLine(4).Trim)			
+			f.Intrinsic.Date.IsDate(v.Local.sOutDate,v.Local.bDate)
+			f.Intrinsic.Control.If(v.Local.bDate.Not)
+				f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: Out Date is not a Date",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"Out Date",v.Local.sNotPassed)
+				f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+				v.Local.sLine(7).Set("Error Out Date is not a Date")
+				f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.GoTo("AfterFor")
+				f.Intrinsic.Control.EndIf				
+				f.Intrinsic.Control.Next(v.Local.iCnt)	
+			f.Intrinsic.Control.Else
+				v.Local.dOutDate.Set(v.Local.sOutDate)
+				f.Intrinsic.Control.If(v.Local.dOutDate,<,v.Local.dStart,or,v.Local.dOutDate,>,v.Local.dEnd)
+					f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: Out Date is not in Date Range",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"Out Date",v.Local.sNotPassed)
+					f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+					v.Local.sLine(7).Set("Error Out Date is not in Date Range")
+					f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.GoTo("AfterFor")
+				f.Intrinsic.Control.EndIf					
+					f.Intrinsic.Control.Next(v.Local.iCnt)					
+				f.Intrinsic.Control.EndIf				
+			f.Intrinsic.Control.EndIf	
+
+			'Time In
+			v.Local.sTimeIn.Set(v.Local.sLine(3).Trim)
+			f.Intrinsic.Control.CallSub("Check_Valid_Time","sTime",v.Local.sTimeIn)
+			f.Intrinsic.Control.If(v.Args.bIsTime,=,False)
+				f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: Time In is not a Time",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"In Time",v.Local.sNotPassed)
+				f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+				v.Local.sLine(7).Set("Error Time In is not a Time")
+				f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.GoTo("AfterFor")
+				f.Intrinsic.Control.EndIf				
+				f.Intrinsic.Control.Next(v.Local.iCnt)	
+			f.Intrinsic.Control.Else
+				'Get GSS Time Stamp for Time in		
+				f.Intrinsic.String.LPad(v.Args.iHour,"0",2,v.Local.sHour)
+				f.Intrinsic.String.LPad(v.Args.iMinute,"0",2,v.Local.sMinute)
+				f.Intrinsic.String.LPad(v.Args.iSec,"0",2,v.Local.sSec)
+				f.Intrinsic.String.Build("{0}{1}{2}",v.Local.sHour,v.Local.sMinute,v.Local.sSec,v.Local.sTimeIn)
+				'Set dInDateTime
+				v.Local.sHold.Set(v.Local.dInDate.FormatYYYYMMDD)
+				v.Local.sYY.Set(v.Local.sHold.Left4)
+				f.Intrinsic.String.Mid(v.Local.sHold,5,2,v.Local.sMM)
+				v.Local.sDD.Set(v.Local.sHold.Right2)
+				Function.Intrinsic.Date.DATETIMESERIAL(v.Local.sYY,v.Local.sMM,v.Local.sDD,v.Args.iHour,v.Args.iMinute,v.Args.iSec,v.Local.dInDateTime)					
+				f.Intrinsic.Control.CallSub("Calculate_Time_Stamp","dDate",v.Local.dInDate,"iHour",v.Args.iHour,"iMinute",v.Args.iMinute,"iSec",v.Args.iSec)
+				f.Intrinsic.String.RPad(v.Args.iGSSTimeStamp,"0",12,v.Local.sGSSTimeStampIn)
+				'In 2018.1 IN_TS_MIN is numeric
+				f.Intrinsic.Control.If(v.Caller.GSSVersion,>,2017.1)
+					f.Intrinsic.String.Format(v.Args.iGSSTimeStamp,"00000000.0000",v.Local.sGSSTimeStampIn)
+				f.Intrinsic.Control.EndIf				
+			f.Intrinsic.Control.EndIf
+			
+			'Time Out
+			v.Local.sTimeOut.Set(v.Local.sLine(5).Trim)
+			f.Intrinsic.Control.CallSub("Check_Valid_Time","sTime",v.Local.sTimeOut)
+			f.Intrinsic.Control.If(v.Args.bIsTime,=,False)
+				f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: Time Out is not a Time",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"Out Time",v.Local.sNotPassed)
+				f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+				v.Local.sLine(7).Set("Error Time Out is not a Time")
+				f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.GoTo("AfterFor")
+				f.Intrinsic.Control.EndIf				
+				f.Intrinsic.Control.Next(v.Local.iCnt)	
+			f.Intrinsic.Control.Else
+				'Get GSS Time Stamp for Time in	
+				f.Intrinsic.String.LPad(v.Args.iHour,"0",2,v.Local.sHour)
+				f.Intrinsic.String.LPad(v.Args.iMinute,"0",2,v.Local.sMinute)
+				f.Intrinsic.String.LPad(v.Args.iSec,"0",2,v.Local.sSec)	
+				f.Intrinsic.String.Build("{0}{1}{2}",v.Local.sHour,v.Local.sMinute,v.Local.sSec,v.Local.sTimeOut)	
+				'Set dInDateTime
+				v.Local.sHold.Set(v.Local.dOutDate.FormatYYYYMMDD)
+				v.Local.sYY.Set(v.Local.sHold.Left4)
+				f.Intrinsic.String.Mid(v.Local.sHold,5,2,v.Local.sMM)
+				v.Local.sDD.Set(v.Local.sHold.Right2)
+				Function.Intrinsic.Date.DATETIMESERIAL(v.Local.sYY,v.Local.sMM,v.Local.sDD,v.Args.iHour,v.Args.iMinute,v.Args.iSec,v.Local.dOutDateTime)					
+				f.Intrinsic.Control.CallSub("Calculate_Time_Stamp","dDate",v.Local.dOutDate,"iHour",v.Args.iHour,"iMinute",v.Args.iMinute,"iSec",v.Args.iSec)								
+				f.Intrinsic.String.RPad(v.Args.iGSSTimeStamp,"0",12,v.Local.sGSSTimeStampOut)
+				'In 2018.1 IN_TS_MIN is numeric
+				f.Intrinsic.Control.If(v.Caller.GSSVersion,>,2017.1)
+					f.Intrinsic.String.Format(v.Args.iGSSTimeStamp,"00000000.0000",v.Local.sGSSTimeStampOut)
+				f.Intrinsic.Control.EndIf				
+			f.Intrinsic.Control.EndIf			
+			
+			f.Intrinsic.Control.If(v.Local.dInDateTime,>,v.Local.dOutDateTime)
+				f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: Not valid Date Time In and Out",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"Time",v.Local.sNotPassed)
+				f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+				v.Local.sLine(7).Set("Error Date Time In must be less or equal to Date Time Out")
+				f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.GoTo("AfterFor")
+				f.Intrinsic.Control.EndIf				
+				f.Intrinsic.Control.Next(v.Local.iCnt)		
+			f.Intrinsic.Control.EndIf
+			
+			
+			v.Local.EARNINGS_CODE.Set(v.Local.sLine(6).Trim)
+			v.Local.EARNINGS_CODE.Set(V.Local.EARNINGS_CODE.Left1)
+			'IsNumeric Earning Code
+			f.Intrinsic.Math.IsNumeric(v.Local.EARNINGS_CODE,v.Local.bNumeric)
+			f.Intrinsic.Control.If(v.Local.bNumeric.Not)
+				f.Intrinsic.String.Build("{0}{1}Line: {2}, Column {3} , Reason: non Employee numeric value",v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iExcelLine,"Paycode",v.Local.sNotPassed)
+				f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)
+				v.Local.sLine(7).Set("Error Paycode non numeric value")
+				f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))
+				f.Intrinsic.Control.If(v.Local.iCnt,=,v.Local.sContent.UBound)
+					f.Intrinsic.Control.ExitFor
+				f.Intrinsic.Control.EndIf				
+				f.Intrinsic.Control.Next(v.Local.iCnt)			
+			f.Intrinsic.Control.EndIf
+			f.Intrinsic.String.LPad(v.Local.EARNINGS_CODE,"0",2,V.Local.EARNINGS_CODE)			
+			
+			v.local.CHARGE_DATE.set(V.Local.dWorkDate.FormatYYYYMMDD)
+			v.local.IN_TS_MIN.set(v.Local.sGSSTimeStampIn) 
+			v.local.OUT_TS_MIN.set(v.Local.sGSSTimeStampOut) 
+			v.local.DATE_IN.set(v.Local.dInDate.FormatYYYYMMDD)
+			v.local.TIME_IN.set(v.Local.sTimeIn) 
+			v.local.DATE_OUT.set(v.Local.dOutDate.FormatYYYYMMDD) 
+			v.local.TIME_OUT.set(v.Local.sTimeOut)				
+			v.local.REC_TYPE.set("T") 			
+			
+			'HOurs Minute Taken
+			Function.Intrinsic.Date.DateDiff ("N",v.Local.dInDateTime,v.Local.dOutDateTime,v.Local.iMinuteDiff)
+			f.Intrinsic.Math.Mod(v.Local.iMinuteDiff,60,v.Local.iMinuteTaken)
+			f.Intrinsic.Math.IDiv(v.Local.iMinuteDiff,60,v.Local.iHourTaken)	
+			v.local.HOURS_HH.set(v.Local.iHourTaken) 
+			v.local.HOURS_MM.set(v.Local.iMinuteTaken)			
+			
+			v.local.PAID.set("Y") 	
+			v.local.EXCUSED.set("") 
+			v.local.ABSENCE_DESC.set("") 	
+			v.local.CLOCKED_IN.set("") 
+			v.local.BAL_AS_DATE.set("00000000") 			
+			v.local.DATE_LAST_CHG.set(v.Ambient.Date.FormatYYYYMMDD)			
+			f.Intrinsic.String.Build("{0}00",v.Global.sBackupTime.right6,v.Local.TIME_LAST_CHG)
+			v.local.LAST_CHG_BY.set(v.Caller.User) 
+			v.local.LAST_CHG_PROG.set("NovaUpl") 			
+			v.local.ONLY_DOLLARS.set("") 
+			v.local.DOLLAR_AMT.set("0") 
+			v.local.ACTUAL_DATE.set(v.Ambient.Date) 
+			v.local.PAYROLL_LOCK.Set("0")			
+			
+			''''''Insert into Time_Attendance
+			f.Intrinsic.String.build("Insert into TIME_ATTENDANCE (EMPLOYEE,CHARGE_DATE,IN_TS_MIN,OUT_TS_MIN,DATE_IN,TIME_IN,DATE_OUT,TIME_OUT,NAME,DEPT,SHIFT,REC_GROUP,REC_TYPE,EARNINGS_CODE,PAID,EXCUSED,ABSENCE_DESC,CLOCKED_IN,BAL_AS_DATE,DATE_LAST_CHG,TIME_LAST_CHG,LAST_CHG_BY,LAST_CHG_PROG,HOURS_HH,HOURS_MM,ONLY_DOLLARS,DOLLAR_AMT,ACTUAL_DATE,PAYROLL_LOCK) values ('{0}','{1}','{2}','{3}','{4}','{5}','{6}','{7}','{8}','{9}','{10}','{11}','{12}','{13}','{14}','{15}','{16}','{17}','{18}','{19}','{20}','{21}','{22}',{23},{24},'{25}',{26},'{27}',{28})",v.Local.EMPLOYEE,v.local.CHARGE_DATE,v.local.IN_TS_MIN,v.local.OUT_TS_MIN,v.local.DATE_IN,v.local.TIME_IN,v.local.DATE_OUT,v.local.TIME_OUT,v.local.NAME.PSQLFriendly,v.local.DEPT,v.local.SHIFT,v.local.REC_GROUP,v.local.REC_TYPE,v.local.EARNINGS_CODE,v.local.PAID,v.local.EXCUSED,v.local.ABSENCE_DESC,v.local.CLOCKED_IN,v.local.BAL_AS_DATE,v.local.DATE_LAST_CHG,v.local.TIME_LAST_CHG,v.local.LAST_CHG_BY,v.local.LAST_CHG_PROG,v.local.HOURS_HH,v.local.HOURS_MM,v.local.ONLY_DOLLARS,v.local.DOLLAR_AMT,v.local.ACTUAL_DATE.PervasiveDate,v.local.PAYROLL_LOCK,v.Local.sSQL)			
+			f.ODBC.Connection!conx.Execute(v.Local.sSQL)
+			f.Intrinsic.Math.Add(v.Local.iSuccess,1,v.Local.iSuccess)
+				
+			'Rebuild file
+			f.Intrinsic.String.Build("Uploaded: {0}",v.Ambient.Now,v.Local.sHold)
+			v.Local.sLine(7).Set(v.Local.sHold)
+			f.Intrinsic.String.Join(v.Local.sLine,",",v.Local.sContent(v.Local.iCnt))		
+			
+		f.Intrinsic.Control.EndIf	
+	f.Intrinsic.Control.Next(v.Local.iCnt)	
+	gui.Form.proBar.Visible(False)
+	
+	'As ExitFor does not work, I use GoTo
+	f.Intrinsic.Control.Label("AfterFor")
+		
+	'Save result file	
+	F.Intrinsic.String.Join(v.Local.sContent,v.Ambient.NewLine,v.Local.sContent)
+	f.Intrinsic.String.Replace(v.Screen.Form!txtFilePath.Text.Trim,".csv","",v.Local.sFilePath)
+	f.Intrinsic.String.Build("{0}_{1}.csv",v.Local.sFilePath,v.Global.sBackupTime,v.Local.sFilePath)
+	f.Intrinsic.File.String2File(v.Local.sFilePath,v.Local.sContent)
+	
+	'Write Transaction:
+	f.Intrinsic.String.Build("{0}\Custom\5782\{1}\Transactions\{2}_{3}_{4}.txt",v.Caller.GlobalDir,v.Caller.CompanyCode,v.Caller.User,v.Ambient.Date.FormatYYYYMMDD,v.Ambient.Now.FormatHHNNSS,v.Local.sTransactionFile)
+	f.Intrinsic.File.String2File(v.Local.sTransactionFile,v.Local.sContent)
+	
+	'Display final message
+	f.Intrinsic.Control.If(v.Local.sNotPassed.Trim,<>,"")
+		f.Intrinsic.String.Build("{0} errors: {1}.{2}{2}{3} rows have been uploaded in GSS.",v.Local.iError,v.Local.sNotPassed,v.Ambient.NewLine,v.Local.iSuccess,v.Local.sError)
+		f.Intrinsic.UI.Msgbox(v.Local.sError,"Error")
+	f.Intrinsic.Control.Else
+		f.Intrinsic.UI.Msgbox("Completed")
+	f.Intrinsic.Control.EndIf	
+	
+	'Unload
+	f.Intrinsic.Control.CallSub("Unload")
+	
+F.Intrinsic.Control.Catch
+    F.Intrinsic.String.Build("Project 5782: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+    f.Intrinsic.Control.CallSub("Write_GAB_Error_Log","sError",v.Local.sError)    
+    F.Intrinsic.UI.Msgbox(V.Local.sError)
+    F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdOK_Click.End
+
+Program.Sub.Calculate_Time_Stamp.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.dDate.Declare
+	
+	v.Local.iGSSJulianDate.Declare	
+	v.Local.iDate.Declare
+	v.Local.iGssTimeStamp.Declare	
+	v.Local.iHour.Declare
+	v.Local.iMinute.Declare
+	v.Local.iSec.Declare
+	v.Local.iHold.Declare		
+
+	v.Local.dDate.Set(v.Args.dDate)
+	v.Local.iHour.Set(v.Args.iHour)
+	v.Local.iMinute.Set(v.Args.iMinute)
+	v.Local.iSec.Set(v.Args.iSec)
+	
+	F.Intrinsic.Date.DateDiff ("d","1899-12-30",v.Local.dDate,v.Local.iDate)
+	f.Intrinsic.Math.Sub(v.Local.iDate,24838,v.Local.iGSSJulianDate)
+	
+	'GSS Time Stamp = iGSSJulianDate * 1440 + (Hours*60) + Minute + MOD(Sec,60)
+	f.Intrinsic.Math.Mult(v.Local.iGSSJulianDate,1440,v.Local.iGssTimeStamp)
+	f.Intrinsic.Math.Mult(v.Local.iHour,60,v.Local.iHold)
+	f.Intrinsic.Math.Add(v.Local.iGssTimeStamp,v.Local.iHold,v.Local.iGssTimeStamp)
+	f.Intrinsic.Math.Add(v.Local.iGssTimeStamp,v.Local.iMinute,v.Local.iGssTimeStamp)
+	f.Intrinsic.Math.Mod(v.Local.iSec,60,v.Local.iHold)
+	f.Intrinsic.Math.Add(v.Local.iGssTimeStamp,v.Local.iHold,v.Local.iGssTimeStamp)
+	
+	f.Intrinsic.Variable.AddRV("iGSSTimeStamp",v.Local.iGssTimeStamp)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project 5782: {0}{1}Subroutine: {2}{1}Subroutine called from:{6}{1}Error Occurred: {3}{1}Description: {4}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,v.Ambient.SubroutineCalledFrom,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	f.Intrinsic.Control.CallSub("Write_GAB_Error_Log","sError",v.Local.sError)
+	f.Intrinsic.Control.CallSub("Unload")
+F.Intrinsic.Control.EndTry
+Program.Sub.Calculate_Time_Stamp.End
+
+Program.Sub.cmdBrowseFile_Click.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sFilePath.Declare
+	v.Local.sDir.Declare
+	
+	'Default folder
+	f.Intrinsic.String.Build("{0}\Custom\5327\{1}",v.Caller.GlobalDir,v.Caller.CompanyCode,v.Local.sDir)
+	F.Intrinsic.UI.ShowOpenFileDialog(V.Local.sDir,"*|*.csv*","",V.Local.sFilePath)
+	F.Intrinsic.Control.If(V.Local.sFilePath,=,"***CANCEL***")
+		F.Intrinsic.UI.Msgbox("No File Was Selected")
+		F.Intrinsic.Control.ExitSub
+	F.Intrinsic.Control.EndIf
+	gui.Form.txtFilePath.Text(v.Local.sFilePath)
+
+F.Intrinsic.Control.Catch
+    F.Intrinsic.String.Build("Project 5782: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+    f.Intrinsic.Control.CallSub("Write_GAB_Error_Log","sError",v.Local.sError)
+    F.Intrinsic.UI.Msgbox(V.Local.sError)
+    F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdBrowseFile_Click.End
+
+Program.Sub.Form_UnLoad.Start
+f.Intrinsic.Control.CallSub("Unload")
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.Unload.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+
+	F.Intrinsic.Control.If(V.ODBC.conx.State,=,1)
+		F.ODBC.Connection!conx.close
+	F.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	Function.Intrinsic.String.Build("Subroutine Error {0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+	f.Intrinsic.Control.CallSub("Write_GAB_Error_Log","sError",v.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End	
+F.Intrinsic.Control.EndTry
+Program.Sub.Unload.End
+
+Program.Sub.cmdHelp_Click.Start
+f.Intrinsic.UI.Msgbox("This is the period that will be overwritten in Time_Attendance in GSS by Nova Time. All records from Time_Attendance in GSS within this period will be overwritten by Nova Time.","Help")
+Program.Sub.cmdHelp_Click.End
+
+Program.Sub.Check_And_Create_Custom_Folder.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sDir.Declare
+	v.Local.bEx.Declare
+	
+	f.Intrinsic.String.Build("{0}\Custom",v.Caller.GlobalDir,v.Local.sDir)
+	f.Intrinsic.File.DirExists(v.Local.sDir,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sDir)
+	f.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.String.Build("{0}\Custom\5782",v.Caller.GlobalDir,v.Local.sDir)
+	f.Intrinsic.File.DirExists(v.Local.sDir,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sDir)
+	f.Intrinsic.Control.EndIf	
+
+	f.Intrinsic.String.Build("{0}\Custom\5782\{1}",v.Caller.GlobalDir,v.Caller.CompanyCode,v.Local.sDir)
+	f.Intrinsic.File.DirExists(v.Local.sDir,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sDir)
+	f.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.String.Build("{0}\Custom\5782\{1}\GAB Error",v.Caller.GlobalDir,v.Caller.CompanyCode,v.Local.sDir)
+	f.Intrinsic.File.DirExists(v.Local.sDir,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sDir)
+	f.Intrinsic.Control.EndIf	
+	
+	f.Intrinsic.String.Build("{0}\Custom\5782\{1}\Transactions",v.Caller.GlobalDir,v.Caller.CompanyCode,v.Local.sDir)
+	f.Intrinsic.File.DirExists(v.Local.sDir,v.Local.bEx)
+	f.Intrinsic.Control.If(v.Local.bEx.Not)
+		f.Intrinsic.File.CreateDir(v.Local.sDir)
+	f.Intrinsic.Control.EndIf		
+
+F.Intrinsic.Control.Catch
+    F.Intrinsic.String.Build("Project 5782: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+    F.Intrinsic.UI.Msgbox(V.Local.sError)
+    f.Intrinsic.Control.CallSub("Write_GAB_Error_Log","sError",v.Local.sError)
+    F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.Check_And_Create_Custom_Folder.End
+
+Program.Sub.Write_GAB_Error_Log.Start
+v.Local.sFile.Declare
+f.Intrinsic.String.Build("{0}\Custom\5782\{1}\GAB Error\{2}_{3}_{4}.txt",v.Caller.GlobalDir,v.Caller.CompanyCode,v.Caller.User,v.Ambient.Date.FormatYYYYMMDD,v.Ambient.Now.FormatHHNNSS,v.Local.sFile)
+f.Intrinsic.File.String2File(v.Local.sFile,v.Args.sError)
+Program.Sub.Write_GAB_Error_Log.End
+
+Program.Sub.Check_Valid_Time.Start
+f.Intrinsic.Control.Try
+	v.Local.sError.Declare
+	v.Local.sHold.Declare
+	v.Local.bNumeric.Declare
+	v.Local.bIsTime.Declare
+	v.Local.sTime.Declare
+	v.Local.sAMPM.Declare
+	v.Local.sNums.Declare
+	v.Local.sHour.Declare
+	v.Local.sMinute.Declare
+	v.Local.sSec.Declare
+	v.Local.iHour.Declare
+	v.Local.iMinute.Declare
+	v.Local.iSec.Declare
+	
+	v.Local.bIsTime.Set(True)
+	f.Intrinsic.String.Split(v.Args.sTime," ",v.Local.sTime)
+	f.Intrinsic.Control.If(v.Local.sTime.UBound,<=,0)
+		v.Local.bIsTime.Set(False)	
+		f.Intrinsic.Variable.AddRV("bIsTime",v.Local.bIsTime)
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf
+	
+	v.Local.sAMPM.Set(v.Local.sTime(1).Trim)
+	f.Intrinsic.Control.If(v.Local.sAMPM.UCase,<>,"AM",and,v.Local.sAMPM.UCase,<>,"PM")
+		v.Local.bIsTime.Set(False)	
+		f.Intrinsic.Variable.AddRV("bIsTime",v.Local.bIsTime)
+		f.Intrinsic.Control.ExitSub		
+	f.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.String.Split(v.Local.sTime(0).Trim,":",v.Local.sNums)
+	f.Intrinsic.Control.If(v.Local.sNums.UBound,<,2)
+		v.Local.bIsTime.Set(False)	
+		f.Intrinsic.Variable.AddRV("bIsTime",v.Local.bIsTime)
+		f.Intrinsic.Control.ExitSub			
+	f.Intrinsic.Control.EndIf
+	
+	v.Local.sHour.Set(v.Local.sNums(0).Trim)
+	v.Local.sMinute.Set(v.Local.sNums(1).Trim)
+	v.Local.sSec.Set(v.Local.sNums(2).Trim)
+	
+	f.Intrinsic.Math.IsNumeric(v.Local.sHour,v.Local.bNumeric)
+	f.Intrinsic.Control.If(v.Local.bNumeric.Not)
+		v.Local.bIsTime.Set(False)	
+		f.Intrinsic.Variable.AddRV("bIsTime",v.Local.bIsTime)
+		f.Intrinsic.Control.ExitSub			
+	f.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.Math.IsNumeric(v.Local.sMinute,v.Local.bNumeric)
+	f.Intrinsic.Control.If(v.Local.bNumeric.Not)
+		v.Local.bIsTime.Set(False)	
+		f.Intrinsic.Variable.AddRV("bIsTime",v.Local.bIsTime)
+		f.Intrinsic.Control.ExitSub			
+	f.Intrinsic.Control.EndIf	
+	
+	f.Intrinsic.Math.IsNumeric(v.Local.sSec,v.Local.bNumeric)
+	f.Intrinsic.Control.If(v.Local.bNumeric.Not)
+		v.Local.bIsTime.Set(False)	
+		f.Intrinsic.Variable.AddRV("bIsTime",v.Local.bIsTime)
+		f.Intrinsic.Control.ExitSub			
+	f.Intrinsic.Control.EndIf
+	
+	v.Local.iHour.Set(v.Local.sHour)
+	v.Local.iMinute.Set(v.Local.sMinute)
+	v.Local.iSec.Set(v.Local.sSec)
+	f.Intrinsic.Control.If(v.Local.iHour,>,12,or,v.Local.iHour,<,0)
+		v.Local.bIsTime.Set(False)	
+		f.Intrinsic.Variable.AddRV("bIsTime",v.Local.bIsTime)
+		f.Intrinsic.Control.ExitSub		
+	f.Intrinsic.Control.EndIf
+
+	f.Intrinsic.Control.If(v.Local.iMinute,>,59,or,v.Local.iMinute,<,0)
+		v.Local.bIsTime.Set(False)	
+		f.Intrinsic.Variable.AddRV("bIsTime",v.Local.bIsTime)
+		f.Intrinsic.Control.ExitSub		
+	f.Intrinsic.Control.EndIf
+	
+	f.Intrinsic.Control.If(v.Local.iSec,>,59,or,v.Local.iSec,<,0)
+		v.Local.bIsTime.Set(False)	
+		f.Intrinsic.Variable.AddRV("bIsTime",v.Local.bIsTime)
+		f.Intrinsic.Control.ExitSub		
+	f.Intrinsic.Control.EndIf	
+	
+	f.Intrinsic.Control.If(v.Local.sAMPM.UCase,=,"AM",and,v.Local.iHour,=,12)
+		v.Local.iHour.Set(0)
+	f.Intrinsic.Control.ElseIf(v.Local.sAMPM.UCase,=,"PM",and,v.Local.iHour,<>,12)
+		f.Intrinsic.Math.Add(v.Local.iHour,12,v.Local.iHour)
+	f.Intrinsic.Control.EndIf
+	
+	v.Local.bIsTime.Set(True)	
+	f.Intrinsic.Variable.AddRV("bIsTime",v.Local.bIsTime)
+	f.Intrinsic.Variable.AddRV("iHour",v.Local.iHour)	
+	f.Intrinsic.Variable.AddRV("iMinute",v.Local.iMinute)	
+	f.Intrinsic.Variable.AddRV("iSec",v.Local.iSec)		
+	
+F.Intrinsic.Control.Catch
+    F.Intrinsic.String.Build("Project 5782: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+    F.Intrinsic.UI.Msgbox(V.Local.sError)    
+    f.Intrinsic.Control.CallSub("Write_GAB_Error_Log","sError",v.Local.sError)
+    F.Intrinsic.Control.CallSub(Unload)
+F.Intrinsic.Control.EndTry
+Program.Sub.Check_Valid_Time.End
